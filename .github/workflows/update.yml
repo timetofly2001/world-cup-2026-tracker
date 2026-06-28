@@ -2,8 +2,7 @@ name: Update World Cup Tracker
 
 on:
   schedule:
-    - cron: '0 14 * * *'   # ~7:00 AM Pacific (PDT)
-    - cron: '0 2 * * *'    # ~7:00 PM Pacific (PDT)
+    - cron: '*/5 * * * *'   # every 5 minutes (GitHub may delay under load)
   workflow_dispatch: {}     # allow manual runs from the Actions tab
 
 jobs:

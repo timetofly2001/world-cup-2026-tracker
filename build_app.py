@@ -36,6 +36,7 @@ URL_PATH = os.path.join(OUT_DIR, "latest_url.txt")
 HTML_OUT = os.path.join(OUT_DIR, "index.html")
 
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates={d}"
+STANDINGS = "https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026"
 
 # Tournament window (group stage start through final). Generous bounds.
 TOURNEY_START = dt.date(2026, 6, 11)
@@ -152,6 +153,51 @@ def parse_event(ev: dict) -> dict | None:
     }
 
 
+def fetch_standings() -> list:
+    """Pull the 12 group tables (final standings + qualification notes)."""
+    req = urllib.request.Request(STANDINGS, headers={"User-Agent": "Mozilla/5.0 worldcup-tracker"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.load(r)
+    except Exception as e:  # noqa: BLE001
+        sys.stderr.write(f"[warn] standings: {e}\n")
+        return []
+
+    groups = []
+    for g in data.get("children", []) or []:
+        entries = (g.get("standings") or {}).get("entries", []) or []
+        teams = []
+        for e in entries:
+            t = e.get("team") or {}
+            stats = {s.get("name"): s for s in (e.get("stats") or [])}
+            note = e.get("note") or {}
+
+            def sval(key: str) -> str:
+                return (stats.get(key) or {}).get("displayValue", "")
+
+            rank = note.get("rank")
+            if rank is None:
+                rv = (stats.get("rank") or {}).get("value")
+                rank = int(rv) if rv else 99
+            logo = ""
+            if t.get("logos"):
+                logo = (t["logos"][0] or {}).get("href", "")
+
+            teams.append({
+                "name": prettify_team(t.get("displayName") or t.get("name") or "TBD"),
+                "abbr": t.get("abbreviation") or "",
+                "logo": logo,
+                "rank": rank,
+                "played": sval("gamesPlayed"),
+                "pts": sval("points"),
+                "gd": sval("pointDifferential"),
+                "note": note.get("description", ""),
+            })
+        teams.sort(key=lambda x: x["rank"])
+        groups.append({"name": g.get("name", ""), "teams": teams})
+    return groups
+
+
 def collect() -> list:
     seen: dict[str, dict] = {}
     day = TOURNEY_START
@@ -166,9 +212,9 @@ def collect() -> list:
     return matches
 
 
-def render_html(matches: list, built_at_iso: str) -> str:
+def render_html(matches: list, standings: list, built_at_iso: str) -> str:
     payload = json.dumps(
-        {"matches": matches, "builtAt": built_at_iso},
+        {"matches": matches, "standings": standings, "builtAt": built_at_iso},
         separators=(",", ":"),
         ensure_ascii=False,
     )
@@ -178,9 +224,10 @@ def render_html(matches: list, built_at_iso: str) -> str:
 def main() -> int:
     cfg = load_config()
     matches = collect()
+    standings = fetch_standings()
     built_at = dt.datetime.now(dt.timezone.utc).isoformat()
 
-    html = render_html(matches, built_at)
+    html = render_html(matches, standings, built_at)
     with open(HTML_OUT, "w", encoding="utf-8") as f:
         f.write(html)
 
@@ -287,6 +334,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .bteam.out{opacity:.4}
   .btbd{color:var(--mut);font-size:14px;text-align:center;padding:16px 0;
     border:1px dashed var(--line);border-radius:12px}
+
+  /* Group standings column (lives left of Round of 32) */
+  .bcol.groups{width:264px}
+  .gtable{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:8px 11px;margin-bottom:11px}
+  .ghead{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--mut);margin-bottom:6px}
+  .gteam{display:flex;align-items:center;gap:8px;font-size:14.5px;padding:3px 0}
+  .gteam .grk{width:13px;flex:none;text-align:center;color:var(--mut);
+    font-size:12.5px;font-variant-numeric:tabular-nums}
+  .gteam img,.gteam .bflag{width:22px;height:15px;object-fit:contain;border-radius:3px;
+    background:#0000000a;flex:none}
+  .gteam .ba{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gteam .gpts{flex:none;font-weight:800;font-variant-numeric:tabular-nums}
+  .gteam.gadv .ba{font-weight:800;color:var(--acc)}
+  .gteam.gadv .grk{color:var(--acc)}
+  .gteam.out{opacity:.38}
 </style>
 </head>
 <body>
@@ -295,8 +359,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div class="sub" id="upd"></div>
 
   <div class="pills">
-    <button class="pill on" data-f="all">All</button>
-    <button class="pill" data-f="upcoming">Upcoming</button>
+    <button class="pill on" data-f="upcoming">Upcoming</button>
     <button class="pill" data-f="completed">Results</button>
     <button class="pill" data-f="bracket">Bracket</button>
   </div>
@@ -309,7 +372,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <script>
 const DATA = /*__DATA__*/;
 const M = DATA.matches || [];
-let filter = "all";
+const G = DATA.standings || [];
+let filter = "upcoming";
 
 const fmtD = iso => { const d=new Date(iso); return isNaN(d)?"":d.toLocaleDateString([], {weekday:"short", month:"long", day:"numeric"}); };
 const fmtT = iso => { const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); };
@@ -343,9 +407,8 @@ function card(m){
 }
 
 function pass(m){
-  if(filter==="upcoming")  return m.state!=="post";
   if(filter==="completed") return m.state==="post";
-  return true;
+  return m.state!=="post";   // upcoming (default)
 }
 
 function renderBracket(){
@@ -372,8 +435,28 @@ function renderBracket(){
   const colsHtml = cols.map(([ord, name]) => {
     const ms = (byRound[ord] || []).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     const inner = ms.length ? ms.map(bmatch).join("") : `<div class="btbd">TBD</div>`;
-    return `<div class="bcol"><div class="bhead">${name}</div>${inner}</div>`;
+    return `<div class="bcol" data-ord="${ord}"><div class="bhead">${name}</div>${inner}</div>`;
   }).join("");
+
+  // Teams that reached the knockouts (real names only, not "R32 #1" placeholders).
+  const advanced = new Set();
+  KO.forEach(m => [m.home, m.away].forEach(t => {
+    if(t && t.name && !/^(R32|R16|QF|SF) #/.test(t.name)) advanced.add(t.name);
+  }));
+
+  const groupTable = g => {
+    const rows = g.teams.map(t => {
+      const adv = advanced.size ? advanced.has(t.name) : /Advance/i.test(t.note);
+      const out = advanced.size ? !advanced.has(t.name) : /Eliminated/i.test(t.note);
+      const logo = t.logo ? `<img src="${t.logo}" alt="" loading="lazy">` : `<span class="bflag"></span>`;
+      return `<div class="gteam ${adv?"gadv":""} ${out?"out":""}">`+
+        `<span class="grk">${t.rank}</span>${logo}<span class="ba">${t.name}</span><span class="gpts">${t.pts}</span></div>`;
+    }).join("");
+    return `<div class="gtable"><div class="ghead">${g.name}</div>${rows}</div>`;
+  };
+  const groupsCol = G.length
+    ? `<div class="bcol groups" data-ord="0"><div class="bhead">Groups</div>${G.map(groupTable).join("")}</div>`
+    : "";
 
   let champ = "";
   const fin = (byRound[6] || []).find(m => m.state === "post");
@@ -383,8 +466,22 @@ function renderBracket(){
   }
 
   list.innerHTML = champ +
-    `<div class="bhint">Bold green = advancing &middot; dimmed = eliminated. Scroll sideways to follow the path to the Final →</div>` +
-    `<div class="bracket">${colsHtml}</div>`;
+    `<div class="bhint">Bold green = advancing &middot; dimmed = eliminated. &larr; Scroll left for final group tables &middot; right to follow the path to the Final &rarr;</div>` +
+    `<div class="bracket">${groupsCol}${colsHtml}</div>`;
+
+  // Auto-snap the current round to the left edge (groups sit off-screen to the left).
+  let activeOrd = null;
+  for(const [ord] of cols){
+    if((byRound[ord] || []).some(m => m.state !== "post")){ activeOrd = ord; break; }
+  }
+  if(activeOrd === null) activeOrd = cols[cols.length-1][0];
+  requestAnimationFrame(()=>{
+    const cont = list.querySelector(".bracket");
+    const target = cont && cont.querySelector(`.bcol[data-ord="${activeOrd}"]`);
+    if(cont && target){
+      cont.scrollLeft += target.getBoundingClientRect().left - cont.getBoundingClientRect().left;
+    }
+  });
 }
 
 function render(){
@@ -392,12 +489,16 @@ function render(){
   const rows = M.filter(pass);
   const list = document.getElementById("list");
   if(!rows.length){ list.innerHTML = `<div class="empty">Nothing here yet.</div>`; return; }
+  const latestFirst = filter === "completed";   // Results: newest game first
   const groups = {}, order = [];
   rows.forEach(m=>{ if(!groups[m.round]){ groups[m.round]=[]; order.push(m.round); } groups[m.round].push(m); });
-  order.sort((a,b)=> ((groups[a][0]||{}).roundOrder??99) - ((groups[b][0]||{}).roundOrder??99));
+  order.sort((a,b)=>{
+    const d = ((groups[a][0]||{}).roundOrder??99) - ((groups[b][0]||{}).roundOrder??99);
+    return latestFirst ? -d : d;
+  });
   list.innerHTML = order.map(r=>{
     const cards = groups[r].slice()
-      .sort((a,b)=> (a.date||"").localeCompare(b.date||""))
+      .sort((a,b)=>{ const c = (a.date||"").localeCompare(b.date||""); return latestFirst ? -c : c; })
       .map(card).join("");
     return `<div class="rhead">${r}</div>${cards}`;
   }).join("");
