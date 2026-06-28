@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import secrets
 import sys
 import urllib.request
@@ -47,8 +48,26 @@ ROUND_META = {
     "quarterfinals": ("Quarterfinals", 3),
     "semifinals": ("Semifinals", 4),
     "third-place": ("Third-Place Match", 5),
+    "3rd-place-match": ("Third-Place Match", 5),
     "final": ("Final", 6),
 }
+
+# ESPN fills not-yet-decided knockout slots with verbose placeholder "teams"
+# like "Round of 32 1 Winner". Shorten them for display until real teams land.
+_PLACEHOLDER_RE = [
+    (re.compile(r"^Round of 32 (\d+) Winner$"), r"R32 #\1"),
+    (re.compile(r"^Round of 16 (\d+) Winner$"), r"R16 #\1"),
+    (re.compile(r"^Quarterfinal (\d+) Winner$"), r"QF #\1"),
+    (re.compile(r"^Semifinal (\d+) Winner$"), r"SF #\1"),
+    (re.compile(r"^Semifinal (\d+) Loser$"), r"SF #\1 (L)"),
+]
+
+
+def prettify_team(name: str) -> str:
+    for pat, rep in _PLACEHOLDER_RE:
+        if pat.match(name):
+            return pat.sub(rep, name)
+    return name
 
 
 def load_config() -> dict:
@@ -105,7 +124,7 @@ def parse_event(ev: dict) -> dict | None:
         t = c.get("team") or {}
         if side in teams:
             teams[side] = {
-                "name": t.get("displayName") or t.get("name") or "TBD",
+                "name": prettify_team(t.get("displayName") or t.get("name") or "TBD"),
                 "abbr": t.get("abbreviation") or "",
                 "logo": t.get("logo") or "",
                 "score": c.get("score"),
@@ -248,6 +267,26 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   .empty{color:var(--mut);text-align:center;padding:50px 0;font-size:17px}
   .foot{margin-top:46px;text-align:center;color:var(--mut);font-size:14px}
+
+  /* Bracket view */
+  .champ{background:var(--acc);color:#fff;border-radius:16px;padding:16px 18px;
+    margin:6px 0 18px;font-size:20px;font-weight:800;text-align:center}
+  .bhint{font-size:14.5px;color:var(--mut);margin:6px 2px 16px;line-height:1.5}
+  .bracket{display:flex;gap:16px;overflow-x:auto;padding-bottom:14px;-webkit-overflow-scrolling:touch}
+  .bcol{flex:0 0 auto;width:188px;display:flex;flex-direction:column;justify-content:center}
+  .bhead{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--mut);margin-bottom:12px;text-align:center}
+  .bmatch{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:9px 11px;margin-bottom:11px}
+  .bteam{display:flex;align-items:center;gap:9px;font-size:15.5px;padding:3px 0}
+  .bteam img,.bteam .bflag{width:24px;height:17px;object-fit:contain;border-radius:3px;
+    background:#0000000a;flex:none}
+  .bteam .ba{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bteam .bs{font-weight:800;font-variant-numeric:tabular-nums}
+  .bteam.win{color:var(--acc);font-weight:800}
+  .bteam.out{opacity:.4}
+  .btbd{color:var(--mut);font-size:14px;text-align:center;padding:16px 0;
+    border:1px dashed var(--line);border-radius:12px}
 </style>
 </head>
 <body>
@@ -259,6 +298,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <button class="pill on" data-f="all">All</button>
     <button class="pill" data-f="upcoming">Upcoming</button>
     <button class="pill" data-f="completed">Results</button>
+    <button class="pill" data-f="bracket">Bracket</button>
   </div>
 
   <div id="list"></div>
@@ -308,7 +348,47 @@ function pass(m){
   return true;
 }
 
+function renderBracket(){
+  const list = document.getElementById("list");
+  const KO = M.filter(m => m.roundOrder >= 1 && m.roundOrder <= 6);
+  const byRound = {};
+  KO.forEach(m => { (byRound[m.roundOrder] = byRound[m.roundOrder] || []).push(m); });
+
+  const cols = [[1,"Round of 32"],[2,"Round of 16"],[3,"Quarterfinals"],[4,"Semifinals"]];
+  if(byRound[5] && byRound[5].length) cols.push([5,"3rd Place"]);
+  cols.push([6,"Final"]);
+
+  const bteam = (t, decided, win) => {
+    const logo = t.logo ? `<img src="${t.logo}" alt="" loading="lazy">` : `<span class="bflag"></span>`;
+    const sc = decided ? `<span class="bs">${t.score??""}</span>` : "";
+    const cls = decided ? (win ? "win" : "out") : "";
+    return `<div class="bteam ${cls}">${logo}<span class="ba">${t.name}</span>${sc}</div>`;
+  };
+  const bmatch = m => {
+    const dec = m.state === "post";
+    return `<div class="bmatch">${bteam(m.home, dec, m.home.winner)}${bteam(m.away, dec, m.away.winner)}</div>`;
+  };
+
+  const colsHtml = cols.map(([ord, name]) => {
+    const ms = (byRound[ord] || []).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    const inner = ms.length ? ms.map(bmatch).join("") : `<div class="btbd">TBD</div>`;
+    return `<div class="bcol"><div class="bhead">${name}</div>${inner}</div>`;
+  }).join("");
+
+  let champ = "";
+  const fin = (byRound[6] || []).find(m => m.state === "post");
+  if(fin){
+    const w = fin.home.winner ? fin.home : (fin.away.winner ? fin.away : null);
+    if(w) champ = `<div class="champ">🏆 Champions &middot; ${w.name}</div>`;
+  }
+
+  list.innerHTML = champ +
+    `<div class="bhint">Bold green = advancing &middot; dimmed = eliminated. Scroll sideways to follow the path to the Final →</div>` +
+    `<div class="bracket">${colsHtml}</div>`;
+}
+
 function render(){
+  if(filter === "bracket"){ renderBracket(); return; }
   const rows = M.filter(pass);
   const list = document.getElementById("list");
   if(!rows.length){ list.innerHTML = `<div class="empty">Nothing here yet.</div>`; return; }
