@@ -274,7 +274,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta property="og:site_name" content="World Cup 2026">
 <meta property="og:title" content="World Cup 2026 — Live Tracker">
 <meta property="og:description" content="Live scores, bracket, and group standings for all 104 matches.">
-<meta property="og:url" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/tracker-2026-0c153c52.html">
+<meta property="og:url" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/tracker-2026-6cf52d29.html">
 <meta property="og:image" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/share-sq-fb0bc1e9.jpg">
 <meta property="og:image:secure_url" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/share-sq-fb0bc1e9.jpg">
 <meta property="og:image:type" content="image/jpeg">
