@@ -275,15 +275,18 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta property="og:title" content="World Cup 2026 — Live Tracker">
 <meta property="og:description" content="Live scores, bracket, and group standings for all 104 matches.">
 <meta property="og:url" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/tracker-2026-0c153c52.html">
-<meta property="og:image" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/og-card-2026-6dd7a90a.png">
-<meta property="og:image:type" content="image/png">
+<meta property="og:image" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/share-sq-fb0bc1e9.jpg">
+<meta property="og:image:secure_url" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/share-sq-fb0bc1e9.jpg">
+<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:image:height" content="1200">
 <meta property="og:image:alt" content="World Cup 2026 — live scores, bracket, group standings">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="World Cup 2026 — Live Tracker">
 <meta name="twitter:description" content="Live scores, bracket, and group standings for all 104 matches.">
-<meta name="twitter:image" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/og-card-2026-6dd7a90a.png">
+<meta name="twitter:image" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/share-sq-fb0bc1e9.jpg">
+<link rel="apple-touch-icon" href="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/icon-6adf0b39.jpg">
+<link rel="icon" type="image/jpeg" href="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/icon-6adf0b39.jpg">
 <style>
   :root{
     --bg:#f4f4f1; --card:#ffffff; --line:#e6e6e0;
