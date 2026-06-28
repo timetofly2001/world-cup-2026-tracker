@@ -268,6 +268,22 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>World Cup 2026</title>
+<meta name="description" content="Live scores, bracket, and group standings for all 104 matches.">
+<!-- Rich link preview (iMessage / Messages, social) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="World Cup 2026">
+<meta property="og:title" content="World Cup 2026 — Live Tracker">
+<meta property="og:description" content="Live scores, bracket, and group standings for all 104 matches.">
+<meta property="og:url" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/tracker-2026-0c153c52.html">
+<meta property="og:image" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/og-card-2026-6dd7a90a.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="World Cup 2026 — live scores, bracket, group standings">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="World Cup 2026 — Live Tracker">
+<meta name="twitter:description" content="Live scores, bracket, and group standings for all 104 matches.">
+<meta name="twitter:image" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/og-card-2026-6dd7a90a.png">
 <style>
   :root{
     --bg:#f4f4f1; --card:#ffffff; --line:#e6e6e0;
@@ -315,42 +331,31 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .empty{color:var(--mut);text-align:center;padding:50px 0;font-size:17px}
   .foot{margin-top:46px;text-align:center;color:var(--mut);font-size:14px}
 
-  /* Bracket view */
+  /* Bracket view — one round at a time, navigated with Prev/Next */
   .champ{background:var(--acc);color:#fff;border-radius:16px;padding:16px 18px;
     margin:6px 0 18px;font-size:20px;font-weight:800;text-align:center}
-  .bhint{font-size:14.5px;color:var(--mut);margin:6px 2px 16px;line-height:1.5}
-  .bracket{display:flex;gap:16px;overflow-x:auto;padding-bottom:14px;-webkit-overflow-scrolling:touch}
-  .bcol{flex:0 0 auto;width:188px;display:flex;flex-direction:column;justify-content:center}
-  .bhead{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-    color:var(--mut);margin-bottom:12px;text-align:center}
-  .bmatch{background:var(--card);border:1px solid var(--line);border-radius:12px;
-    padding:9px 11px;margin-bottom:11px}
-  .bteam{display:flex;align-items:center;gap:9px;font-size:15.5px;padding:3px 0}
-  .bteam img,.bteam .bflag{width:24px;height:17px;object-fit:contain;border-radius:3px;
-    background:#0000000a;flex:none}
-  .bteam .ba{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .bteam .bs{font-weight:800;font-variant-numeric:tabular-nums}
-  .bteam.win{color:var(--acc);font-weight:800}
-  .bteam.out{opacity:.4}
-  .btbd{color:var(--mut);font-size:14px;text-align:center;padding:16px 0;
-    border:1px dashed var(--line);border-radius:12px}
+  .bnav{display:flex;align-items:center;gap:12px;margin:4px 0 20px}
+  .bnav button{font-size:15px;font-weight:700;color:var(--txt);background:var(--card);
+    border:1px solid var(--line);border-radius:999px;padding:9px 16px;cursor:pointer;white-space:nowrap}
+  .bnav button:disabled{opacity:.3;cursor:default}
+  .bnav .bstage{flex:1;text-align:center;font-size:19px;font-weight:800;letter-spacing:-.2px}
 
-  /* Group standings column (lives left of Round of 32) */
-  .bcol.groups{width:264px}
-  .gtable{background:var(--card);border:1px solid var(--line);border-radius:12px;
-    padding:8px 11px;margin-bottom:11px}
-  .ghead{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-    color:var(--mut);margin-bottom:6px}
-  .gteam{display:flex;align-items:center;gap:8px;font-size:14.5px;padding:3px 0}
-  .gteam .grk{width:13px;flex:none;text-align:center;color:var(--mut);
-    font-size:12.5px;font-variant-numeric:tabular-nums}
-  .gteam img,.gteam .bflag{width:22px;height:15px;object-fit:contain;border-radius:3px;
+  /* Group standings (shown as the first bracket stage) */
+  .gwrap{display:grid;grid-template-columns:repeat(2,1fr);gap:13px}
+  @media(max-width:520px){.gwrap{grid-template-columns:1fr}}
+  .gtable{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .ghead{font-size:12.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--mut);margin-bottom:8px}
+  .gteam{display:flex;align-items:center;gap:9px;font-size:16px;padding:4px 0}
+  .gteam .grk{width:15px;flex:none;text-align:center;color:var(--mut);
+    font-size:13px;font-variant-numeric:tabular-nums}
+  .gteam img,.gteam .bflag{width:24px;height:17px;object-fit:contain;border-radius:3px;
     background:#0000000a;flex:none}
   .gteam .ba{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .gteam .gpts{flex:none;font-weight:800;font-variant-numeric:tabular-nums}
   .gteam.gadv .ba{font-weight:800;color:var(--acc)}
   .gteam.gadv .grk{color:var(--acc)}
-  .gteam.out{opacity:.38}
+  .gteam.out{opacity:.4}
 </style>
 </head>
 <body>
@@ -411,52 +416,41 @@ function pass(m){
   return m.state!=="post";   // upcoming (default)
 }
 
+let bStage = null;   // which bracket stage is showing; persists across re-renders
+
 function renderBracket(){
   const list = document.getElementById("list");
   const KO = M.filter(m => m.roundOrder >= 1 && m.roundOrder <= 6);
   const byRound = {};
   KO.forEach(m => { (byRound[m.roundOrder] = byRound[m.roundOrder] || []).push(m); });
 
-  const cols = [[1,"Round of 32"],[2,"Round of 16"],[3,"Quarterfinals"],[4,"Semifinals"]];
-  if(byRound[5] && byRound[5].length) cols.push([5,"3rd Place"]);
-  cols.push([6,"Final"]);
+  const rounds = [[1,"Round of 32"],[2,"Round of 16"],[3,"Quarterfinals"],[4,"Semifinals"]];
+  if(byRound[5] && byRound[5].length) rounds.push([5,"Third-Place Match"]);
+  rounds.push([6,"Final"]);
 
-  const bteam = (t, decided, win) => {
-    const logo = t.logo ? `<img src="${t.logo}" alt="" loading="lazy">` : `<span class="bflag"></span>`;
-    const sc = decided ? `<span class="bs">${t.score??""}</span>` : "";
-    const cls = decided ? (win ? "win" : "out") : "";
-    return `<div class="bteam ${cls}">${logo}<span class="ba">${t.name}</span>${sc}</div>`;
-  };
-  const bmatch = m => {
-    const dec = m.state === "post";
-    return `<div class="bmatch">${bteam(m.home, dec, m.home.winner)}${bteam(m.away, dec, m.away.winner)}</div>`;
-  };
+  // Stages, left→right: Group Stage (if loaded) then each knockout round.
+  const stages = [];
+  if(G.length) stages.push({key:"groups", name:"Group Stage"});
+  rounds.forEach(([ord, name]) => stages.push({key:ord, name}));
 
-  const colsHtml = cols.map(([ord, name]) => {
-    const ms = (byRound[ord] || []).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-    const inner = ms.length ? ms.map(bmatch).join("") : `<div class="btbd">TBD</div>`;
-    return `<div class="bcol" data-ord="${ord}"><div class="bhead">${name}</div>${inner}</div>`;
-  }).join("");
+  // First open lands on the current round (earliest round with an undecided match).
+  if(bStage === null){
+    let activeOrd = null;
+    for(const [ord] of rounds){
+      if((byRound[ord] || []).some(m => m.state !== "post")){ activeOrd = ord; break; }
+    }
+    if(activeOrd === null) activeOrd = rounds[rounds.length-1][0];
+    const i = stages.findIndex(s => s.key === activeOrd);
+    bStage = i < 0 ? 0 : i;
+  }
+  bStage = Math.min(Math.max(bStage, 0), stages.length - 1);
+  const stage = stages[bStage];
 
   // Teams that reached the knockouts (real names only, not "R32 #1" placeholders).
   const advanced = new Set();
   KO.forEach(m => [m.home, m.away].forEach(t => {
     if(t && t.name && !/^(R32|R16|QF|SF) #/.test(t.name)) advanced.add(t.name);
   }));
-
-  const groupTable = g => {
-    const rows = g.teams.map(t => {
-      const adv = advanced.size ? advanced.has(t.name) : /Advance/i.test(t.note);
-      const out = advanced.size ? !advanced.has(t.name) : /Eliminated/i.test(t.note);
-      const logo = t.logo ? `<img src="${t.logo}" alt="" loading="lazy">` : `<span class="bflag"></span>`;
-      return `<div class="gteam ${adv?"gadv":""} ${out?"out":""}">`+
-        `<span class="grk">${t.rank}</span>${logo}<span class="ba">${t.name}</span><span class="gpts">${t.pts}</span></div>`;
-    }).join("");
-    return `<div class="gtable"><div class="ghead">${g.name}</div>${rows}</div>`;
-  };
-  const groupsCol = G.length
-    ? `<div class="bcol groups" data-ord="0"><div class="bhead">Groups</div>${G.map(groupTable).join("")}</div>`
-    : "";
 
   let champ = "";
   const fin = (byRound[6] || []).find(m => m.state === "post");
@@ -465,23 +459,34 @@ function renderBracket(){
     if(w) champ = `<div class="champ">🏆 Champions &middot; ${w.name}</div>`;
   }
 
-  list.innerHTML = champ +
-    `<div class="bhint">Bold green = advancing &middot; dimmed = eliminated. &larr; Scroll left for final group tables &middot; right to follow the path to the Final &rarr;</div>` +
-    `<div class="bracket">${groupsCol}${colsHtml}</div>`;
+  const nav = `<div class="bnav">
+    <button class="bprev" ${bStage===0?"disabled":""}>&larr; Prev</button>
+    <div class="bstage">${stage.name}</div>
+    <button class="bnext" ${bStage===stages.length-1?"disabled":""}>Next &rarr;</button>
+  </div>`;
 
-  // Auto-snap the current round to the left edge (groups sit off-screen to the left).
-  let activeOrd = null;
-  for(const [ord] of cols){
-    if((byRound[ord] || []).some(m => m.state !== "post")){ activeOrd = ord; break; }
+  let body;
+  if(stage.key === "groups"){
+    const groupTable = g => {
+      const rows = g.teams.map(t => {
+        const adv = advanced.size ? advanced.has(t.name) : /Advance/i.test(t.note);
+        const out = advanced.size ? !advanced.has(t.name) : /Eliminated/i.test(t.note);
+        const logo = t.logo ? `<img src="${t.logo}" alt="" loading="lazy">` : `<span class="bflag"></span>`;
+        return `<div class="gteam ${adv?"gadv":""} ${out?"out":""}">`+
+          `<span class="grk">${t.rank}</span>${logo}<span class="ba">${t.name}</span><span class="gpts">${t.pts}</span></div>`;
+      }).join("");
+      return `<div class="gtable"><div class="ghead">${g.name}</div>${rows}</div>`;
+    };
+    body = `<div class="gwrap">${G.map(groupTable).join("")}</div>`;
+  } else {
+    const ms = (byRound[stage.key] || []).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    body = ms.length ? ms.map(card).join("") : `<div class="empty">Not set yet.</div>`;
   }
-  if(activeOrd === null) activeOrd = cols[cols.length-1][0];
-  requestAnimationFrame(()=>{
-    const cont = list.querySelector(".bracket");
-    const target = cont && cont.querySelector(`.bcol[data-ord="${activeOrd}"]`);
-    if(cont && target){
-      cont.scrollLeft += target.getBoundingClientRect().left - cont.getBoundingClientRect().left;
-    }
-  });
+
+  list.innerHTML = champ + nav + body;
+  const prev = list.querySelector(".bprev"), next = list.querySelector(".bnext");
+  if(prev) prev.addEventListener("click", ()=>{ bStage--; renderBracket(); });
+  if(next) next.addEventListener("click", ()=>{ bStage++; renderBracket(); });
 }
 
 function render(){
