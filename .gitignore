@@ -1,0 +1,7 @@
+# Build outputs (regenerated each run)
+index.html
+state.json
+latest_url.txt
+update.log
+__pycache__/
+*.pyc
