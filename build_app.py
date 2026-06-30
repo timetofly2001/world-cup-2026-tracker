@@ -129,6 +129,7 @@ def parse_event(ev: dict) -> dict | None:
                 "abbr": t.get("abbreviation") or "",
                 "logo": t.get("logo") or "",
                 "score": c.get("score"),
+                "shootout": c.get("shootoutScore"),
                 "winner": bool(c.get("winner")),
             }
 
@@ -324,6 +325,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .team .sc{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;min-width:28px;text-align:right}
   .team.win .nm{font-weight:800;color:var(--acc)}
   .team.win .sc{color:var(--acc)}
+  .team .sc .pen{font-size:16px;font-weight:700;color:var(--mut)}
+  .team.win .sc .pen{color:var(--acc)}
 
   .meta{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);
     display:grid;gap:9px}
@@ -389,13 +392,17 @@ const fmtT = iso => { const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeSt
 function whenLine(m){
   const d = fmtD(m.date);
   if(m.state==="in")   return `${d} &middot; <span class="live">LIVE</span>`;
-  if(m.state==="post") return `${d} &middot; Final`;
+  if(m.state==="post"){
+    const pens = (m.home.shootout!=null && m.home.shootout!=="");
+    return `${d} &middot; Final${pens?" (pens)":""}`;
+  }
   return `${d} &middot; ${fmtT(m.date)}`;
 }
 
 function teamRow(t, played, win){
   const logo = t.logo ? `<img src="${t.logo}" alt="" loading="lazy">` : `<span class="noflag"></span>`;
-  const sc = played ? `<span class="sc">${t.score??""}</span>` : "";
+  const so = (t.shootout!=null && t.shootout!=="") ? ` <span class="pen">(${t.shootout})</span>` : "";
+  const sc = played ? `<span class="sc">${t.score??""}${so}</span>` : "";
   return `<div class="team ${win?"win":""}">${logo}<span class="nm">${t.name}</span>${sc}</div>`;
 }
 
