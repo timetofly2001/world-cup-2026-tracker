@@ -80,6 +80,8 @@ def load_config() -> dict:
         "stem": "tracker-2026",
         # Pinned once: stable but unguessable URL across rebuilds.
         "token": secrets.token_hex(4),
+        # GoatCounter site code for visitor analytics (empty = no tracking).
+        "goatcounter": "",
     }
     with open(CONFIG_PATH, "w") as f:
         json.dump(cfg, f, indent=2)
@@ -213,13 +215,20 @@ def collect() -> list:
     return matches
 
 
-def render_html(matches: list, standings: list, built_at_iso: str) -> str:
+def render_html(matches: list, standings: list, built_at_iso: str, gc_code: str = "") -> str:
     payload = json.dumps(
         {"matches": matches, "standings": standings, "builtAt": built_at_iso},
         separators=(",", ":"),
         ensure_ascii=False,
     )
-    return HTML_TEMPLATE.replace("/*__DATA__*/", payload)
+    html = HTML_TEMPLATE.replace("/*__DATA__*/", payload)
+    # Privacy-friendly visitor analytics (GoatCounter). Only injected when a
+    # site code is set in config.json — otherwise no tracking script ships.
+    gc = (
+        f'<script data-goatcounter="https://{gc_code}.goatcounter.com/count" '
+        f'async src="//gc.zgo.at/count.js"></script>'
+    ) if gc_code else ""
+    return html.replace("<!--__GC__-->", gc)
 
 
 def main() -> int:
@@ -228,7 +237,7 @@ def main() -> int:
     standings = fetch_standings()
     built_at = dt.datetime.now(dt.timezone.utc).isoformat()
 
-    html = render_html(matches, standings, built_at)
+    html = render_html(matches, standings, built_at, cfg.get("goatcounter", ""))
     with open(HTML_OUT, "w", encoding="utf-8") as f:
         f.write(html)
 
@@ -288,6 +297,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta name="twitter:image" content="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/share-sq-fb0bc1e9.jpg">
 <link rel="apple-touch-icon" href="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/icon-6adf0b39.jpg">
 <link rel="icon" type="image/jpeg" href="https://austin-brief-audio.s3.us-east-2.amazonaws.com/worldcup/icon-6adf0b39.jpg">
+<!--__GC__-->
 <style>
   :root{
     --bg:#f4f4f1; --card:#ffffff; --line:#e6e6e0;
@@ -362,12 +372,31 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .gteam.gadv .ba{font-weight:800;color:var(--acc)}
   .gteam.gadv .grk{color:var(--acc)}
   .gteam.out{opacity:.4}
+
+  /* Time-zone picker */
+  .tzbar{display:flex;align-items:center;gap:8px;margin:16px 0 2px;font-size:14.5px;
+    color:var(--mut);flex-wrap:wrap}
+  .tzbar .tzico{font-size:15px}
+  #tzsel{font-size:14.5px;font-weight:600;color:var(--txt);background:var(--card);
+    border:1px solid var(--line);border-radius:999px;padding:7px 13px;cursor:pointer;
+    font-family:inherit;-webkit-appearance:none;appearance:none}
+  .tzhint{color:var(--acc);font-weight:700;font-size:13.5px;animation:tzpulse 1.4s ease-in-out infinite}
+  .tzhint.gone{display:none}
+  @keyframes tzpulse{0%,100%{opacity:.3}50%{opacity:1}}
+  .upd-live{color:var(--acc);font-weight:800}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>World Cup 2026</h1>
   <div class="sub" id="upd"></div>
+
+  <div class="tzbar" id="tzbar">
+    <span class="tzico">🕐</span>
+    <span class="tztxt">Times shown in</span>
+    <select id="tzsel" aria-label="Choose time zone"></select>
+    <span class="tzhint" id="tzhint">&larr; pick yours</span>
+  </div>
 
   <div class="pills">
     <button class="pill on" data-f="upcoming">Upcoming</button>
@@ -377,7 +406,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <div id="list"></div>
 
-  <div class="foot">Dates &amp; times in your local zone &middot; Data: ESPN</div>
+  <div class="foot">Times in your selected zone &middot; Live scores auto-refresh &middot; Data: ESPN</div>
 </div>
 
 <script>
@@ -386,8 +415,12 @@ const M = DATA.matches || [];
 const G = DATA.standings || [];
 let filter = "upcoming";
 
-const fmtD = iso => { const d=new Date(iso); return isNaN(d)?"":d.toLocaleDateString([], {weekday:"short", month:"long", day:"numeric"}); };
-const fmtT = iso => { const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); };
+const TZ_KEY = "wc_tz";
+let TZ = localStorage.getItem(TZ_KEY) || "auto";
+const tzOpt = () => TZ==="auto" ? {} : {timeZone: TZ};
+
+const fmtD = iso => { const d=new Date(iso); return isNaN(d)?"":d.toLocaleDateString([], {weekday:"short", month:"long", day:"numeric", ...tzOpt()}); };
+const fmtT = iso => { const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit", ...tzOpt()}); };
 
 function whenLine(m){
   const d = fmtD(m.date);
@@ -519,6 +552,125 @@ function render(){
   }).join("");
 }
 
+/* ---- Time-zone picker (US zones first, then the rest of the world) --- */
+const TZ_GROUPS = [
+  ["", [["auto","Auto (your device)"]]],
+  ["United States", [
+    ["America/Los_Angeles","Pacific"],
+    ["America/Denver","Mountain"],
+    ["America/Chicago","Central"],
+    ["America/New_York","Eastern"],
+    ["America/Anchorage","Alaska"],
+    ["Pacific/Honolulu","Hawaii"],
+  ]],
+  ["North America", [
+    ["America/Toronto","Toronto"],
+    ["America/Mexico_City","Mexico City"],
+  ]],
+  ["Rest of world", [
+    ["Europe/London","London"],
+    ["Europe/Paris","Central Europe (Paris)"],
+    ["Europe/Athens","Athens / Cairo"],
+    ["Europe/Moscow","Moscow"],
+    ["Asia/Dubai","Dubai"],
+    ["Asia/Kolkata","India"],
+    ["Asia/Singapore","Singapore / Beijing"],
+    ["Asia/Tokyo","Tokyo / Seoul"],
+    ["Australia/Sydney","Sydney"],
+    ["Pacific/Auckland","Auckland"],
+  ]],
+];
+(function initTz(){
+  const sel = document.getElementById("tzsel");
+  TZ_GROUPS.forEach(([g, opts])=>{
+    let parent = sel;
+    if(g){ const og=document.createElement("optgroup"); og.label=g; sel.appendChild(og); parent=og; }
+    opts.forEach(([v,l])=>{ const o=document.createElement("option"); o.value=v; o.textContent=l; parent.appendChild(o); });
+  });
+  sel.value = TZ;
+  if(localStorage.getItem(TZ_KEY)) document.getElementById("tzhint").classList.add("gone");
+  sel.addEventListener("change", ()=>{
+    TZ = sel.value;
+    localStorage.setItem(TZ_KEY, TZ);
+    document.getElementById("tzhint").classList.add("gone");
+    render();
+    stampUpd();
+  });
+})();
+
+/* ---- Live in-browser refresh — independent of the GitHub build ------- */
+/* The baked-in data is the first paint; this keeps live/recent scores
+   current by hitting ESPN directly (CORS-open) every minute and on reopen. */
+const ESPN_SB = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=";
+const RMETA = {"group-stage":["Group Stage",0],"round-of-32":["Round of 32",1],"round-of-16":["Round of 16",2],
+  "quarterfinals":["Quarterfinals",3],"semifinals":["Semifinals",4],"third-place":["Third-Place Match",5],
+  "3rd-place-match":["Third-Place Match",5],"final":["Final",6]};
+let lastLive = 0;
+
+function pretty(name){
+  return name
+    .replace(/^Round of 32 (\d+) Winner$/,"R32 #$1")
+    .replace(/^Round of 16 (\d+) Winner$/,"R16 #$1")
+    .replace(/^Quarterfinal (\d+) Winner$/,"QF #$1")
+    .replace(/^Semifinal (\d+) Winner$/,"SF #$1")
+    .replace(/^Semifinal (\d+) Loser$/,"SF #$1 (L)");
+}
+function liveParse(ev){
+  const comp = (ev.competitions||[])[0]; if(!comp) return null;
+  const st = (comp.status||{}).type || {};
+  const slug = (ev.season||{}).slug || "";
+  const rm = RMETA[slug] || [ (slug.replace(/-/g," ").replace(/\b\w/g,c=>c.toUpperCase())) || "Match", 99 ];
+  const venue = comp.venue || {}, addr = venue.address || {};
+  const tv = [];
+  (comp.geoBroadcasts||[]).forEach(b=>{ const n=(b.media||{}).shortName; if(n && !tv.includes(n)) tv.push(n); });
+  const sides = {home:null, away:null};
+  (comp.competitors||[]).forEach(c=>{
+    const t=c.team||{};
+    if(c.homeAway in sides) sides[c.homeAway] = {
+      name: pretty(t.displayName||t.name||"TBD"), abbr: t.abbreviation||"", logo: t.logo||"",
+      score: c.score, shootout: c.shootoutScore, winner: !!c.winner };
+  });
+  if(!sides.home || !sides.away) return null;
+  return { id: ev.id, date: comp.date||ev.date, round: rm[0], roundOrder: rm[1],
+    state: st.state||"pre", statusDetail: st.detail||"", statusShort: st.shortDetail||"", completed: !!st.completed,
+    venue: venue.fullName||"TBD", city: addr.city||"", country: addr.country||"", tv,
+    home: sides.home, away: sides.away };
+}
+async function liveRefresh(force){
+  const now = Date.now();
+  if(!force && now - lastLive < 9000) return;        // debounce bursts
+  if(document.hidden && !force) return;
+  lastLive = now;
+  const base = new Date();
+  const days = [-1,0,1].map(off=>{
+    const d = new Date(base.getTime() + off*864e5);
+    return ""+d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,"0")+String(d.getUTCDate()).padStart(2,"0");
+  });
+  try{
+    const results = await Promise.all(days.map(d =>
+      fetch(ESPN_SB+d).then(r=>r.ok?r.json():null).catch(()=>null)));
+    let changed = false;
+    const byId = {}; M.forEach((m,i)=>{ byId[m.id]=i; });
+    results.forEach(j=>{
+      ((j&&j.events)||[]).forEach(ev=>{
+        const p = liveParse(ev); if(!p || !p.id) return;
+        const i = byId[p.id];
+        if(i==null){ byId[p.id]=M.push(p)-1; changed=true; return; }   // brand-new fixture
+        const m = M[i];
+        if(m.state!==p.state || m.home.score!==p.home.score || m.away.score!==p.away.score
+           || m.home.winner!==p.home.winner || m.away.winner!==p.away.winner) changed = true;
+        m.state=p.state; m.statusDetail=p.statusDetail; m.statusShort=p.statusShort; m.completed=p.completed;
+        m.date=p.date||m.date;
+        ["home","away"].forEach(s=>{ m[s].score=p[s].score; m[s].shootout=p[s].shootout; m[s].winner=p[s].winner;
+          if(p[s].logo) m[s].logo=p[s].logo; if(p[s].name) m[s].name=p[s].name; });
+      });
+    });
+    if(changed) render();
+    liveOk = true;
+    stampUpd();
+  }catch(e){ /* network blip — keep last good data on screen */ }
+}
+
 document.querySelectorAll("[data-f]").forEach(el=>{
   el.addEventListener("click", ()=>{
     filter = el.getAttribute("data-f");
@@ -527,11 +679,25 @@ document.querySelectorAll("[data-f]").forEach(el=>{
   });
 });
 
+let liveOk = false;
+function stampUpd(){
+  const el = document.getElementById("upd");
+  if(liveOk){
+    const t = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit", ...tzOpt()});
+    el.innerHTML = `<span class="upd-live">&#9679; Live</span> &middot; updated ${t}`;
+  } else {
+    const b = new Date(DATA.builtAt);
+    el.textContent = "Updated " + (isNaN(b) ? "" : b.toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit", ...tzOpt()}));
+  }
+}
+
 (function(){
-  const b = new Date(DATA.builtAt);
-  document.getElementById("upd").textContent =
-    "Updated " + (isNaN(b) ? "" : b.toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}));
+  stampUpd();
   render();
+  liveRefresh(true);                                   // pull live scores on open
+  setInterval(liveRefresh, 60000);                     // and every minute after
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) liveRefresh(true); });
+  window.addEventListener("pageshow", ()=>liveRefresh(true));   // reopen / back-forward cache
 })();
 </script>
 </body>
